@@ -9,6 +9,8 @@ import(
 	"encoding/json"
 	"strings"
 	"net/url"
+	"strconv"
+	"time"
 )
 
 // variables
@@ -35,17 +37,21 @@ func buildPage(pagenum int) string {
 		//fmt.Println(postlist[i].Name())
 		content,_ := ioutil.ReadFile(blog_path + "/" + postlist[i + (pagenum - 1) * len(page)].Name())
 		json.Unmarshal(content, &p)
-		post_body := fmt.Sprintf("<h3>%v</h3>%v\n<p>%v</p>\n<p>Comments:<ul>\n", p.Title, p.Date,  p.Body)
+		epoch,_ := strconv.Atoi(p.Date)
+		post_time := time.Unix(int64(epoch), 0)
+		post_time_string := fmt.Sprintf("%d-%02d-%02d", post_time.Year(), post_time.Month(), post_time.Day())
+		post_body := fmt.Sprintf("<h3>%v<a href=\"?perma=%v\"> &gt;&gt;</a></h3>", p.Title, p.Date)
+		post_body += fmt.Sprintf("<p>%v<br>\n%v<br>\nComments:</p>\n<ul>\n", post_time_string,  p.Body)
 		for _,c := range(p.Comments) {
 			if  c != "" {
-				post_body += fmt.Sprintln("<li>" + c)
+				post_body += fmt.Sprintln("<li>" + c + "\n")
 			}
 		}
-		post_body += "</ul><br>"
-		post_body += "<form action=\"/cgi/spr-test\" method=\"POST\">"
+		post_body += "</ul><br>\n"
+		post_body += "<form action=\"" + env_var["REQUEST_URI"] + "\" method=\"POST\">"
 		post_body += "<input type=\"hidden\" name=\"id\" value=\"" + p.Date + "\" />"
-		post_body += "<input type=\"submit\" value=\"Comment\">"
-		post_body += "<textarea name=\"c\" rows=\"1\" cols=\"100\">"
+		post_body += "<input type=\"submit\" value=\"Comment\" style=\"height:40px; width:80px\">"
+		post_body += "<textarea name=\"c\" rows=\"2\" cols=\"50\" size=\"1000\">"
 		post_body += "</textarea>"
 		post_body += "</form>"
 		response_body = post_body + response_body
@@ -55,19 +61,52 @@ func buildPage(pagenum int) string {
 	}
 	return response_body
 }
+func buildPost(id string) string {
+	var response_body string
+	var p Post
+	content,err := ioutil.ReadFile(blog_path + "/" + id)
+	if err == nil {
+		json.Unmarshal(content, &p)
+		epoch,_ := strconv.Atoi(p.Date)
+		post_time := time.Unix(int64(epoch), 0)
+		post_time_string := fmt.Sprintf("%d-%02d-%02d", post_time.Year(), post_time.Month(), post_time.Day())
+		post_body := fmt.Sprintf("<h3>%v<a href=\"?perma=%v\"> &gt;&gt;</a></h3>", p.Title, p.Date)
+		post_body += fmt.Sprintf("<p>%v<br>\n%v<br>\nComments:</p>\n<ul>\n", post_time_string,  p.Body)
+		for _,c := range(p.Comments) {
+			if  c != "" {
+				post_body += fmt.Sprintln("<li>" + c + "\n")
+			}
+		}
+		post_body += "</ul><br>\n"
+		post_body += "<form action=\"" + env_var["REQUEST_URI"] + "\" method=\"POST\">"
+		post_body += "<input type=\"hidden\" name=\"id\" value=\"" + p.Date + "\" />"
+		post_body += "<input type=\"submit\" value=\"Comment\" style=\"height:40px; width:80px\">"
+		post_body += "<textarea name=\"c\" rows=\"2\" cols=\"50\" size=\"1000\">"
+		post_body += "</textarea>"
+		post_body += "</form>"
+		response_body = post_body + response_body
+	} else {
+		response_body = "post " + id + " not found"
+	}
+	return response_body
+}
 
 func updateComment(id, comment string) {
 	var post Post
-	content,_ := ioutil.ReadFile(blog_path + "/" + id)
+	content,err := ioutil.ReadFile(blog_path + "/" + id)
 	json.Unmarshal(content, &post)
-	if post.Comments[0] != "" {
-		for j:=len(post.Comments)-1;j>0;j-- {
-			post.Comments[j] = post.Comments[j-1]
+	if err != nil {
+		response_body += "<h2>go fuck yourself</h2>"
+	} else {
+		if post.Comments[0] != "" {
+			for j:=len(post.Comments)-1;j>0;j-- {
+				post.Comments[j] = post.Comments[j-1]
+			}
 		}
+		post.Comments[0] = comment
+		json_bytes,_ := json.Marshal(post)
+		ioutil.WriteFile(blog_path + "/" + id, json_bytes, 0644)
 	}
-	post.Comments[0] = comment
-	json_bytes,_ := json.Marshal(post)
-	ioutil.WriteFile(blog_path + "/" + id, json_bytes, 0644)
 }
 
 func main() {
@@ -85,7 +124,11 @@ func main() {
 			query_var[split[0]] = split[1]
 		}
 	}
-	response_body = "<!doctype html>\n<html><meta charset=\"utf-8\">\n<header><title>SprachRohr Blog</title></header>\n<body>\n" 
+	response_body = "<!doctype html>\n<html><meta charset=\"utf-8\">\n"
+	response_body += "<header><title>SprachRohr Blog</title></header>\n<body>\n" 
+	response_body += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
+	response_body += "<img src=\"/podge.png\" width=\"134\" height=\"90\">\n"
+	response_body += "<h1>SprachRohr Blog</h1>\n"
 	if env_var["REQUEST_METHOD"] == "POST" {
 		if len(os.Args) == 2 && os.Args[1] != "" {
 			args,_ = url.QueryUnescape(os.Args[1])
@@ -101,12 +144,19 @@ func main() {
 				clean_c = strings.Replace(clean_c, "<", "&lt; ", -1)
 				clean_c = strings.Replace(clean_c, "\"", "&quot; ", -1)
 				clean_c = strings.Replace(clean_c, "'", "&apos; ", -1)
+				if len(clean_c) > 1000 {
+					clean_c = string([]rune(clean_c)[0:1000])
+				}
 				updateComment(arg_var["id"], clean_c)
 			}
 		}
 	}
-	response_body += buildPage(1)
-
+	if id := query_var["perma"]; id != "" {
+		response_body += buildPost(id)
+	} else {
+		response_body += buildPage(1)
+	}
+	response_body += "<p>For bugs, ideas, suggestion and other spam: karlyan.kamerer (at) gmail.com </p>"
 	response_body += "</body>\n</html>\n"
 
 	fmt.Printf("HTTP/1.1 200 OK\r\nServer: nurgling/0.1\r\n")
