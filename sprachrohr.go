@@ -50,7 +50,7 @@ func buildPage(pagenum int) string {
 		post_body += "</ul><br>\n"
 		post_body += "<form action=\"" + env_var["REQUEST_URI"] + "\" method=\"POST\">"
 		post_body += "<input type=\"hidden\" name=\"id\" value=\"" + p.Date + "\" />"
-		post_body += "<input type=\"submit\" value=\"Comment\" style=\"height:40px; width:80px\">"
+		post_body += "<input type=\"submit\" value=\"Comment\" style=\"height:21px; width:80px\">"
 		post_body += "<textarea name=\"c\" rows=\"2\" cols=\"50\" size=\"1000\">"
 		post_body += "</textarea>"
 		post_body += "</form>"
@@ -78,12 +78,12 @@ func buildPost(id string) string {
 			}
 		}
 		post_body += "</ul><br>\n"
-		post_body += "<form action=\"" + env_var["REQUEST_URI"] + "\" method=\"POST\">"
-		post_body += "<input type=\"hidden\" name=\"id\" value=\"" + p.Date + "\" />"
-		post_body += "<input type=\"submit\" value=\"Comment\" style=\"height:40px; width:80px\">"
-		post_body += "<textarea name=\"c\" rows=\"2\" cols=\"50\" size=\"1000\">"
-		post_body += "</textarea>"
-		post_body += "</form>"
+		post_body += "<form action=\"" + env_var["REQUEST_URI"] + "\" method=\"POST\"\n>"
+		post_body += "<input type=\"hidden\" name=\"id\" value=\"" + p.Date + "\" />\n"
+		post_body += "<input type=\"submit\" value=\"Comment\" style=\"height:40px; width:80px\">\n"
+		post_body += "<textarea name=\"c\" rows=\"2\" cols=\"50\" size=\"1000\">\n"
+		post_body += "</textarea>\n"
+		post_body += "</form>\n"
 		response_body = post_body + response_body
 	} else {
 		response_body = "post " + id + " not found"
@@ -127,7 +127,7 @@ func main() {
 	response_body = "<!doctype html>\n<html><meta charset=\"utf-8\">\n"
 	response_body += "<header><title>SprachRohr Blog</title></header>\n<body>\n" 
 	response_body += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
-	response_body += "<img src=\"/podge.png\" width=\"134\" height=\"90\">\n"
+	response_body += "<a href=/><img src=\"/podge.png\" width=\"134\" height=\"90\">\n</a>"
 	response_body += "<h1>SprachRohr Blog</h1>\n"
 	if env_var["REQUEST_METHOD"] == "POST" {
 		if len(os.Args) == 2 && os.Args[1] != "" {
@@ -156,7 +156,7 @@ func main() {
 	} else {
 		response_body += buildPage(1)
 	}
-	response_body += "<p>For bugs, ideas, suggestion and other spam: karlyan.kamerer (at) gmail.com </p>"
+	response_body += "<p><a href=/faq.html>FAQ</a> For bugs, ideas, suggestion and other spam: karlyan.kamerer (at) gmail.com </p>\n"
 	response_body += "</body>\n</html>\n"
 
 	fmt.Printf("HTTP/1.1 200 OK\r\nServer: nurgling/0.1\r\n")
