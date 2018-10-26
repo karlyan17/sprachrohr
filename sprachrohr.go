@@ -11,6 +11,7 @@ import(
 	"net/url"
 	"strconv"
 	"time"
+	"regexp"
 )
 
 // variables
@@ -18,6 +19,7 @@ var environ []string
 var args string
 var response_body string
 var blog_path string = "/home/nurgling/blog"
+var error_message string = "<h4>Oops, something went wrong</h4><p>Please send the exact URL and a description what you were doing to karlyan.kamerer (at) gmail.com"
 var env_var map[string]string
 var query_var map[string]string
 
@@ -32,10 +34,18 @@ var page [10]Post
 
 func buildPage(pagenum int) string {
 	var response_body string
-	postlist,_ := ioutil.ReadDir("/home/nurgling/blog")
+	postlist,err := ioutil.ReadDir(blog_path)
+	if err != nil {
+		response_body = error_message
+		return response_body
+	}
 	for i,p := range(page) {
 		//fmt.Println(postlist[i].Name())
-		content,_ := ioutil.ReadFile(blog_path + "/" + postlist[i + (pagenum - 1) * len(page)].Name())
+		content,err := ioutil.ReadFile(blog_path + "/" + postlist[i + (pagenum - 1) * len(page)].Name())
+		if err != nil {
+			response_body = error_message
+			return response_body
+		}
 		json.Unmarshal(content, &p)
 		epoch,_ := strconv.Atoi(p.Date)
 		post_time := time.Unix(int64(epoch), 0)
@@ -50,7 +60,7 @@ func buildPage(pagenum int) string {
 		post_body += "</ul><br>\n"
 		post_body += "<form action=\"" + env_var["REQUEST_URI"] + "\" method=\"POST\">"
 		post_body += "<input type=\"hidden\" name=\"id\" value=\"" + p.Date + "\" />"
-		post_body += "<input type=\"submit\" value=\"Comment\" style=\"height:21px; width:80px\">"
+		post_body += "<input type=\"submit\" value=\"Comment\">"
 		post_body += "<textarea name=\"c\" rows=\"2\" cols=\"50\" size=\"1000\">"
 		post_body += "</textarea>"
 		post_body += "</form>"
@@ -87,6 +97,41 @@ func buildPost(id string) string {
 		response_body = post_body + response_body
 	} else {
 		response_body = "post " + id + " not found"
+	}
+	return response_body
+}
+
+func buildSearch(search_term string) string {
+	var response_body string
+	var p Post
+	postlist,err := ioutil.ReadDir(blog_path)
+	if err != nil {
+		response_body = error_message
+		return response_body
+	}
+	for _,post_file := range(postlist) {
+		content,err := ioutil.ReadFile(blog_path + "/" + post_file.Name())
+		if err != nil {
+			response_body = error_message
+			return response_body
+		}
+		json.Unmarshal(content, &p)
+		epoch,_ := strconv.Atoi(p.Date)
+		post_time := time.Unix(int64(epoch), 0)
+		post_time_string := fmt.Sprintf("%d-%02d-%02d", post_time.Year(), post_time.Month(), post_time.Day())
+		in_body,_ :=  regexp.MatchString(search_term, p.Body)
+		in_epoch,_ := regexp.MatchString(search_term, p.Date)
+		in_title,_ := regexp.MatchString(search_term, p.Title)
+		in_date,_ := regexp.MatchString(search_term, post_time_string)
+		in_comments := false
+		for _,comment := range(p.Comments) {
+			if in_comments,_ = regexp.MatchString(search_term, comment); in_comments {
+				break
+			}
+		}
+		if in_body || in_epoch || in_title || in_date || in_comments {
+			response_body += fmt.Sprintf("<a href=\"?perma=%v\">&gt;&gt; </a>%v: %v<br>", p.Date, post_time_string, p.Title)
+		}
 	}
 	return response_body
 }
@@ -129,6 +174,9 @@ func main() {
 	response_body += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
 	response_body += "<a href=/><img src=\"/podge.png\" width=\"134\" height=\"90\">\n</a>"
 	response_body += "<h1>SprachRohr Blog</h1>\n"
+	response_body += "<form action=\"" + env_var["REQUEST_URI"] + "\" method=\"GET\">"
+	response_body += "<input type=\"text\" name=\"q\"><input type=\"submit\" value=\"Search\">"
+	response_body += "</form><br>"
 	if env_var["REQUEST_METHOD"] == "POST" {
 		if len(os.Args) == 2 && os.Args[1] != "" {
 			args,_ = url.QueryUnescape(os.Args[1])
@@ -153,6 +201,8 @@ func main() {
 	}
 	if id := query_var["perma"]; id != "" {
 		response_body += buildPost(id)
+	} else if search_term:= query_var["q"]; search_term !="" {
+		response_body += buildSearch(search_term)
 	} else {
 		response_body += buildPage(1)
 	}
