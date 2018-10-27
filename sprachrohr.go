@@ -30,7 +30,7 @@ type Post struct {
         Comments [5]string
 }
 
-var page [10]Post
+var page [5]Post
 
 func buildPage(pagenum int) string {
 	var response_body string
@@ -40,8 +40,10 @@ func buildPage(pagenum int) string {
 		return response_body
 	}
 	for i,p := range(page) {
-		//fmt.Println(postlist[i].Name())
-		content,err := ioutil.ReadFile(blog_path + "/" + postlist[i + (pagenum - 1) * len(page)].Name())
+		post_index := len(postlist) - (1 + i + (pagenum - 1)*len(page))
+		if post_index < 0 {
+			break}
+		content,err := ioutil.ReadFile(blog_path + "/" + postlist[post_index].Name())
 		if err != nil {
 			response_body = error_message
 			return response_body
@@ -64,10 +66,8 @@ func buildPage(pagenum int) string {
 		post_body += "<textarea name=\"c\" rows=\"2\" cols=\"50\" size=\"1000\">"
 		post_body += "</textarea>"
 		post_body += "</form>"
-		response_body = post_body + response_body
-		if i == len(postlist) - 1 {
-			break
-		}
+		response_body += post_body
+		
 	}
 	return response_body
 }
@@ -172,7 +172,7 @@ func main() {
 	response_body = "<!doctype html>\n<html><meta charset=\"utf-8\">\n"
 	response_body += "<header><title>SprachRohr Blog</title></header>\n<body>\n" 
 	response_body += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
-	response_body += "<a href=/><img src=\"/podge.png\" width=\"134\" height=\"90\">\n</a>"
+	response_body += "<a href=/><img src=\"/podge.png\" width=\"268\" height=\"180\">\n</a>"
 	response_body += "<h1>SprachRohr Blog</h1>\n"
 	response_body += "<form action=\"" + env_var["REQUEST_URI"] + "\" method=\"GET\">"
 	response_body += "<input type=\"text\" name=\"q\"><input type=\"submit\" value=\"Search\">"
@@ -199,12 +199,19 @@ func main() {
 			}
 		}
 	}
+	pagenum, err := strconv.Atoi(query_var["p"])
 	if id := query_var["perma"]; id != "" {
 		response_body += buildPost(id)
 	} else if search_term:= query_var["q"]; search_term !="" {
 		response_body += buildSearch(search_term)
+	} else if err == nil && pagenum != 0 && pagenum != 1 {
+		response_body += fmt.Sprintf("<p style=\"text-align:center;\"><a href=?p=%v>&lt; newer</a>|<a href=?p=%v>older &gt;</a></p>\n", strconv.Itoa(pagenum - 1), strconv.Itoa(pagenum + 1))
+		response_body += buildPage(pagenum)
+		response_body += fmt.Sprintf("<p style=\"text-align:center;\"><a href=?p=%v>&lt; newer</a>|<a href=?p=%v>older &gt;</a></p>\n", strconv.Itoa(pagenum - 1), strconv.Itoa(pagenum + 1))
 	} else {
+		response_body += "<p style=\"text-align:center;\"><a href=?p=2>older &gt;</a></p>\n"
 		response_body += buildPage(1)
+		response_body += "<p style=\"text-align:center;\"><a href=?p=2>older &gt;</a></p>\n"
 	}
 	response_body += "<p><a href=/faq.html>FAQ</a> For bugs, ideas, suggestion and other spam: karlyan.kamerer (at) gmail.com </p>\n"
 	response_body += "</body>\n</html>\n"
