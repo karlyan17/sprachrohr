@@ -216,6 +216,7 @@ func main() {
 	response_body += "<p><a href=/faq.html>FAQ</a> For bugs, ideas, suggestion and other spam: karlyan.kamerer (at) gmail.com </p>\n"
 	response_body += "</body>\n</html>\n"
 
-	fmt.Printf("HTTP/1.1 200 OK\r\nServer: nurgling/0.1\r\n")
-	fmt.Printf("Content-Type: text/html; charset=utf-8\r\nContent-Length: %v\r\n\r\n" + response_body, len(response_body))
+	//fmt.Printf("HTTP/1.1 200 OK\r\nServer: nurgling/0.1\r\n")
+	//fmt.Printf("Content-Type: text/html; charset=utf-8\r\nContent-Length: %v\r\n\r\n" + response_body, len(response_body))
+	fmt.Printf(response_body)
 }
