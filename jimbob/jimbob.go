@@ -3,98 +3,134 @@ package jimbob
 
 import(
     "encoding/json"
-    "reflect"
     "strconv"
     "errors"
+    "fmt"
     "io/ioutil"
-    "sprachrohr/freshlog"
 )
 
 type Bucket struct {
     Path string
-    Data interface{}
+    Data map[int]interface{}
     next_index int
 }
 
-func NewBucket(path string, data interface{}) Bucket {
-    if validMap(data) {
+func NewBucket(path string) (Bucket,error) {
+    err := validDir(path)
+    if err != nil {
+        return Bucket{},err
+    } else {
         bucket := Bucket{
             Path: path,
-            Data: data,
+            Data: make(map[int]interface{}),
         }
-        return bucket
-    } else {
-        freshlog.Fatal.Fatal("Map validity check failed: jimbob bucket data has to be of Type map[int] instead of %v",
-        reflect.TypeOf(data),
-        )
-        return Bucket{}
+        bucket.updateNextIndex()
+        return bucket,nil
     }
 }
 
-func OpenBucket(path string, elem interface{}) Bucket {
-    elem_type := reflect.TypeOf(elem)
-    bucket_date_type := reflect.MapOf(reflect.TypeOf(0), elem_type)
-    freshlog.Debug.Printf("creating bucket of type %v from elements of type %v", bucket_date_type, elem_type)
-    bucket_data := reflect.MakeMap(bucket_date_type)
+func OpenBucket(path string) (Bucket,error) {
+    err := validDir(path)
+    if err != nil {
+        return Bucket{},err
+    }
     doc_files,err := ioutil.ReadDir(path)
     if err != nil {
-        freshlog.Fatal.Fatal("Failed to read documents form %v with error %v", path, err)
+        return Bucket{},err
     }
+
+    var return_err error
+    bucket := Bucket{
+        Path: path,
+        Data: make(map[int]interface{}),
+    }
+
     for _,file := range(doc_files) {
-        freshlog.Debug.Printf("reading file %v", file)
+        var doc interface{}
         doc_index,err := strconv.Atoi(file.Name())
         if err != nil {
-            freshlog.Error.Printf("could not convert name to index for file %v with error %v", file.Name(), err)
+            return_err = errors.New(fmt.Sprintf("%v\ncould not convert name to index for file %v with error %v", return_err, file.Name(), err))
             continue
         }
-        contents,err := ioutil.ReadFile(file.Name())
+        path_name := path + "/" + file.Name()
+        contents,err := ioutil.ReadFile(path_name)
         if err != nil {
-            freshlog.Error.Printf("could not read file %v with error %v", file.Name(), err)
+            return_err = errors.New(fmt.Sprintf("%v\ncould not read file %v with error %v", return_err, path_name, err))
             continue
         }
-        doc := reflect.New(elem_type)
-        err = json.Unmarshal(contents, doc)
+
+        err = json.Unmarshal(contents, &doc)
         if err != nil {
-            freshlog.Error.Printf("could not parse file %v into interface %v with error %v", file.Name(), elem_type, err)
+            return_err = errors.New(fmt.Sprintf("%v\ncould not parse file %v  with error %v", return_err, path_name, err))
             continue
         }
-        bucket_data.SetMapIndex(reflect.ValueOf(doc_index), reflect.ValueOf(doc))
+        bucket.Data[doc_index] = doc
 
     }
-    return NewBucket(path, bucket_data)
+    bucket.updateNextIndex()
+    return bucket, return_err
 }
 
-func (bucket Bucket) AddDoc(doc interface{}, index ...int) (int, error) {
-    if len(index) != 1 {
-        if _,exists := bucket.Data[index[0]]; !exists {
-            bucket.Data[index[0]] = doc
-            return index[0], nil
-        } else {
-            return -1, errors.New(fmt.Sprintf("Index %v already exists in bucket %v", index[0], bucket.Path))
+func Commit(path string,data map[int]interface{}) error {
+    var ret_err error
+    var path_name string
+    for name, doc := range(data) {
+        doc_json,err := json.Marshal(doc)
+        if err != nil {
+            ret_err  = errors.New(fmt.Sprintf("%v\nunable to enjode %v:%v into json skipping",ret_err,doc,name))
+            continue
         }
+        path_name = path + "/" + strconv.Itoa(name)
+        err = ioutil.WriteFile(path_name, doc_json, 0644)
+        if err != nil {
+            ret_err = errors.New(fmt.Sprintf("%v\nunable to write file ",ret_err,path_name))
+            continue
+        }
+    }
+    return ret_err
+}
+
+func (bucket *Bucket) Post(doc interface{}) (int, error) {
+    new_index := bucket.next_index
+    if _,exists := bucket.Data[new_index]; exists {
+        return -1, errors.New(fmt.Sprintf("entry with index %v already exists:[%v], this means the database is in an undefined state, consider restarting application", new_index, bucket.Data[new_index]))
     } else {
-        new_index = bucket.next_index
-        bucket.data[new_index] = doc
+        bucket.Data[new_index] = doc
         bucket.updateNextIndex()
+        go Commit(bucket.Path, bucket.Data)
         return new_index, nil
     }
-
 }
 
-func (bucket Bucket) updateNextIndex() {
+func emptyDir(path string) error {
+    dir_cont,err := ioutil.ReadDir(path)
+    if err != nil {
+        return err
+    } else if len(dir_cont) > 0 {
+        return errors.New(fmt.Sprintf("%v is not empty, may already contain a jimbob bucket. Not importing", path))
+    } else {
+        return nil
+    }
+}
+
+func validDir(path string) error {
+    dir_cont,err := ioutil.ReadDir(path)
+    if err != nil {
+        return err
+    }
+    for _,file := range(dir_cont) {
+        if file.IsDir() {
+            return errors.New(fmt.Sprintf("%v contains the directory %v. jimbob filestructure does not use directories. Not importing", path, file.Name()))
+        }
+    }
+    return nil
+}
+
+func (bucket *Bucket) updateNextIndex() {
     for i := bucket.next_index;; i++ {
-        if _,exists := bucket.data[i]; !exists {
+        if _,exists := bucket.Data[i]; !exists {
             bucket.next_index = i
+            break
         }
     }
-}
-
-func validMap(in interface{}) bool {
-    if map_kind := reflect.ValueOf(in).Kind().String(); map_kind == "map" {
-        if map_keys := reflect.ValueOf(in).MapKeys(); map_keys[0].Kind().String() == "int" {
-            freshlog.Debug.Printf("passed map is valid jimbob bucket data")
-            return true
-        }
-    }
-    return false
 }
