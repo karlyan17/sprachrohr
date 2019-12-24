@@ -6,6 +6,7 @@ import(
     "strconv"
     "errors"
     "fmt"
+    "os"
     "io/ioutil"
 )
 
@@ -71,7 +72,7 @@ func OpenBucket(path string) (Bucket,error) {
     return bucket, return_err
 }
 
-func Commit(path string,data map[int]interface{}) error {
+func WriteOut(path string,data map[int]interface{}) error {
     var ret_err error
     var path_name string
     for name, doc := range(data) {
@@ -97,9 +98,16 @@ func (bucket *Bucket) Post(doc interface{}) (int, error) {
     } else {
         bucket.Data[new_index] = doc
         bucket.updateNextIndex()
-        go Commit(bucket.Path, bucket.Data)
+        go WriteOut(bucket.Path, bucket.Data)
         return new_index, nil
     }
+}
+
+func (bucket *Bucket) Delete(id int) error {
+    path_name := bucket.Path + "/" + strconv.Itoa(id)
+    delete(bucket.Data, id)
+    err := os.Remove(path_name)
+    return err
 }
 
 func emptyDir(path string) error {
