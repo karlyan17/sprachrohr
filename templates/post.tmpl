@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8">
+		<title>frogblog</title>
+	</head>
+    <h1><a href="/">frogblog</a></h1>
+	<body>
+{{range $id, $elem := .}}
+    <h1>{{ $elem.Title }}</h1>
+    <p>{{ $elem.Body }}</p>
+    <a href="{{ $id }}/delete">x</a>
+{{end}}
+	</body>
+</html>

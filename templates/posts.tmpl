@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8">
+		<title>frogblog</title>
+	</head>
+	<body>
+    <h1><a href="/">frogblog</a></h1>
+{{range $id, $elem := .}}
+    <h2><a href="posts/{{ $id }}">{{ $elem.Title }}</a></h2>
+    <p>{{ $elem.Body }}</p>
+{{end}}
+	</body>
+</html>

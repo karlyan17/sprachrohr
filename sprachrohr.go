@@ -6,7 +6,6 @@ import(
     "github.com/karlyan17/jimbob"
     "github.com/gorilla/mux"
     "net/http"
-    "io"
     "strconv"
     "io/ioutil"
     "html/template"
@@ -18,60 +17,86 @@ import(
 var CONFIG config.Config
 var DB  jimbob.Bucket
 
-func MainHandler(w http.ResponseWriter, r *http.Request) {
-    nBytes,err := io.WriteString(w, "main Hellow!")
-    freshlog.Debug.Print("served ", nBytes)
-    if err != nil {
-        freshlog.Error.Print("served %v with ", nBytes)
-    }
-}
-
-func PostHandler(writer http.ResponseWriter, request *http.Request) {
+func MainHandler(writer http.ResponseWriter, request *http.Request) {
     freshlog.Debug.Print("request is: ", request)
 
-    switch request.Method {
-    case "GET":
-        PostView(writer, request)
-    case "POST":
-        PostPost(writer, request)
-    case "DELETE":
-        PostDelete(writer, request)
-    }
+    vars := mux.Vars(request)
+    freshlog.Debug.Print("vars are: ", vars)
 
+    http.Redirect(writer, request, "/posts", http.StatusSeeOther)
 }
 
-func PostView(writer http.ResponseWriter, request *http.Request) {
+func PostsViewer(writer http.ResponseWriter, request *http.Request) {
+    freshlog.Debug.Print("request is: ", request)
+
+    vars := mux.Vars(request)
+    freshlog.Debug.Print("vars are: ", vars)
+
+    serveTemplate("posts.tmpl", writer, DB.Data)
+}
+
+func PostViewer(writer http.ResponseWriter, request *http.Request) {
+    freshlog.Debug.Print("request is: ", request)
+
     vars := mux.Vars(request)
     freshlog.Debug.Print("vars are: ", vars)
 
     if len(vars) == 0 {
-        serveTemplate("posts.tmpl", writer, DB.Data)
-    } else {
-        id,err := strconv.Atoi(vars["id"])
-        if err != nil {
-            serveTemplate("posts.tmpl", writer, DB.Data)
-        } else {
-            serveTemplate("post.tmpl", writer, DB.Data[id])
-        }
+        http.Redirect(writer, request, "/posts", http.StatusSeeOther)
+        return
     }
+
+    id,err := strconv.Atoi(vars["id"])
+    if err != nil {
+        http.Redirect(writer, request, "/posts", http.StatusSeeOther)
+        return
+    }
+    if id >= len(DB.Data) {
+        writer.WriteHeader(http.StatusNotFound)
+        writer.Write([]byte("gibbet nischt"))
+        return
+    }
+
+    serveTemplate("post.tmpl", writer, map[int]interface{} {id: DB.Data[id]})
 }
 
-func PostPost(writer http.ResponseWriter, request *http.Request) {
+func PostCreator(writer http.ResponseWriter, request *http.Request) {
+    freshlog.Debug.Print("request is: ", request)
+
+    writer.WriteHeader(http.StatusOK)
+    serveTemplate("post_creator.tmpl", writer, DB.Data)
 }
 
-func PostDelete(writer http.ResponseWriter, request *http.Request) {
+func PostDeleter(writer http.ResponseWriter, request *http.Request) {
+    freshlog.Debug.Print("request is: ", request)
+
+    vars := mux.Vars(request)
+    freshlog.Debug.Print("vars are: ", vars)
+    if len(vars) == 0 {
+        freshlog.Warn.Print("somehow passed empty vars to deleter")
+        writer.WriteHeader(http.StatusInternalServerError)
+    }
+
+    id,err := strconv.Atoi(vars["id"])
+    if err != nil {
+        freshlog.Warn.Print("somehow passed invalid  vars to deleter, ", err)
+        writer.WriteHeader(http.StatusInternalServerError)
+    }
+    writer.WriteHeader(http.StatusOK)
+    serveTemplate("post_deleter.tmpl", writer, DB.Data[id])
 }
 
-func serveTemplate(tmpl_path string, writer http.ResponseWriter, data interface{}) {
-    templ_file,err := ioutil.ReadFile(tmpl_path)
+func serveTemplate(tmpl string, writer http.ResponseWriter, data interface{}) {
+    templ_file,err := ioutil.ReadFile(CONFIG.Template_path + "/" + tmpl)
     if err != nil {
         freshlog.Error.Print("failed to read template file: ", err)
+        writer.WriteHeader(http.StatusInternalServerError)
     }
 
-    templ,err := template.New(tmpl_path).Parse(string(templ_file))
+    templ,err := template.New(tmpl).Parse(string(templ_file))
     if err != nil{
         freshlog.Error.Print("failed to parse template: ", err)
-        return
+        writer.WriteHeader(http.StatusInternalServerError)
     }
 
     err = templ.Execute(writer, data)
@@ -93,19 +118,14 @@ func main() {
         freshlog.Fatal.Fatal("could not open jimbob Bucket: ",err)
     }
 
-    //for i := 0; i <10; i++ {
-    //    freshlog.Debug.Print("posting to DB")
-    //    _,err = DB.Post(apost)
-    //    if err != nil {
-    //        freshlog.Error.Print("could not POST to jimbob DB: ",err)
-    //    }
-    //}
 
     //multiplex
     r := mux.NewRouter()
     r.HandleFunc("/", MainHandler)
-    r.HandleFunc("/posts", PostHandler)
-    r.HandleFunc("/posts/{id:[0-9]*}", PostHandler)
+    r.HandleFunc("/posts", PostsViewer)
+    r.HandleFunc("/posts/{id:[0-9]*}", PostViewer)
+    r.HandleFunc("/posts/{id:[0-9]*}/delete", PostDeleter)
+    r.HandleFunc("/posts/create", PostCreator)
 
     //do shit
     freshlog.Fatal.Fatal(http.ListenAndServe(CONFIG.IP + ":" + strconv.Itoa(CONFIG.Port), r))
