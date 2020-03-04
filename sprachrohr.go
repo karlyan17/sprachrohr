@@ -9,7 +9,7 @@ import(
     "strconv"
     "io/ioutil"
     "html/template"
-    //"sprachrohr/post"
+    "sprachrohr/post"
     "sprachrohr/freshlog"
     "sprachrohr/config"
 )
@@ -51,7 +51,8 @@ func PostViewer(writer http.ResponseWriter, request *http.Request) {
         http.Redirect(writer, request, "/posts", http.StatusSeeOther)
         return
     }
-    if id >= len(DB.Data) {
+    if DB.Data[id] == nil {
+        //TODO make error
         writer.WriteHeader(http.StatusNotFound)
         writer.Write([]byte("gibbet nischt"))
         return
@@ -62,9 +63,37 @@ func PostViewer(writer http.ResponseWriter, request *http.Request) {
 
 func PostCreator(writer http.ResponseWriter, request *http.Request) {
     freshlog.Debug.Print("request is: ", request)
+    switch request.Method {
+    case http.MethodGet:
+        writer.WriteHeader(http.StatusOK)
+        serveTemplate("post_creator.tmpl", writer, DB.Data)
+    case http.MethodPost:
+        err := request.ParseForm()
+        if err != nil {
+            freshlog.Warn.Print("error parsing Form: ", err)
+            http.Redirect(writer, request, request.RequestURI, http.StatusNotModified)
+            return
+        }
+        title := request.PostFormValue("title")
+        freshlog.Debug.Print("Title: ", title)
+        body := request.PostFormValue("body")
+        freshlog.Debug.Print("Body: ", body)
+        if title == "" || body == "" {
+            freshlog.Warn.Print("neither Title nor Body can be empty!")
+            http.Redirect(writer, request, request.RequestURI, http.StatusNotModified)
+            return
+        }
+        new_post := post.NewPost(title, body)
+        id, err := DB.Post(new_post)
+        if err != nil {
+            freshlog.Warn.Print("committing to database failed: ", err)
+            http.Redirect(writer, request, request.RequestURI, http.StatusNotModified)
+            return
+        }
+        http.Redirect(writer, request, "/posts/" + strconv.Itoa(id), http.StatusFound)
+        return
+    }
 
-    writer.WriteHeader(http.StatusOK)
-    serveTemplate("post_creator.tmpl", writer, DB.Data)
 }
 
 func PostDeleter(writer http.ResponseWriter, request *http.Request) {
@@ -72,6 +101,7 @@ func PostDeleter(writer http.ResponseWriter, request *http.Request) {
 
     vars := mux.Vars(request)
     freshlog.Debug.Print("vars are: ", vars)
+
     if len(vars) == 0 {
         freshlog.Warn.Print("somehow passed empty vars to deleter")
         writer.WriteHeader(http.StatusInternalServerError)
@@ -79,14 +109,42 @@ func PostDeleter(writer http.ResponseWriter, request *http.Request) {
 
     id,err := strconv.Atoi(vars["id"])
     if err != nil {
-        freshlog.Warn.Print("somehow passed invalid  vars to deleter, ", err)
-        writer.WriteHeader(http.StatusInternalServerError)
+        //TODO make error
+        http.Redirect(writer, request, "/posts", http.StatusSeeOther)
+        return
     }
-    writer.WriteHeader(http.StatusOK)
-    serveTemplate("post_deleter.tmpl", writer, DB.Data[id])
+    if DB.Data[id] == nil {
+        //TODO make error
+        writer.WriteHeader(http.StatusNotFound)
+        writer.Write([]byte("gibbet nischt"))
+        return
+    }
+
+    switch request.Method {
+    case http.MethodGet:
+        writer.WriteHeader(http.StatusOK)
+        serveTemplate("post_deleter.tmpl", writer, map[int]interface{} {id: DB.Data[id]})
+        return
+    case http.MethodPost:
+        if err != nil {
+            freshlog.Warn.Print("error converting ID to string: ", err)
+            http.Redirect(writer, request, request.RequestURI, http.StatusNotModified)
+            return
+        }
+        err = DB.Delete(id)
+        if err != nil {
+            freshlog.Warn.Print("committing to database failed: ", err)
+            http.Redirect(writer, request, request.RequestURI, http.StatusNotModified)
+            return
+        }
+        freshlog.Debug.Print("Successfully deleted: ", id)
+        http.Redirect(writer, request, "/posts", http.StatusFound)
+        return
+    }
 }
 
 func serveTemplate(tmpl string, writer http.ResponseWriter, data interface{}) {
+    //TODO return error
     templ_file,err := ioutil.ReadFile(CONFIG.Template_path + "/" + tmpl)
     if err != nil {
         freshlog.Error.Print("failed to read template file: ", err)

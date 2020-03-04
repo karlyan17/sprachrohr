@@ -7,8 +7,13 @@
     <h1><a href="/">frogblog</a></h1>
 	<body>
     <h2>Are yoy sure you want to delete</h2>
-    <h3>{{ .Title }}</h3>
+{{range $id, $elem := .}}
+    <h3>{{ $elem.Title }}</h3>
     <h2>?</h2>
-    <a href="delete">Y</a>    <a href="delete">N</a>
+    <form method="post">
+        <input type="submit" value="YES">
+        <button type="button" onclick="window.location.replace('/posts/{{ $id }}')">NO</button>
+    </form>
+{{end}}
 	</body>
 </html>

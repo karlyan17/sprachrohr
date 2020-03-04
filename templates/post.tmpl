@@ -9,7 +9,9 @@
 {{range $id, $elem := .}}
     <h1>{{ $elem.Title }}</h1>
     <p>{{ $elem.Body }}</p>
-    <a href="{{ $id }}/delete">x</a>
+    <form method="get" action="/posts/{{ $id }}/delete">
+        <input type="Submit" value="delete">
+    </form>
 {{end}}
 	</body>
 </html>
