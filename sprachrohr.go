@@ -3,7 +3,8 @@ package main
 
 
 import(
-    "github.com/karlyan17/jimbob"
+    //"github.com/karlyan17/jimbob"
+    "jimbob"
     "github.com/gorilla/mux"
     "net/http"
     "strconv"
@@ -167,9 +168,10 @@ func serveTemplate(tmpl string, writer http.ResponseWriter, data interface{}) {
 
 func main() {
     //
-    freshlog.Debug.Print("opening jimbob bucket")
     CONFIG = config.ParseFlags()
+    freshlog.SetLogLevel(CONFIG.Log_Level)
     freshlog.Debug.Print(CONFIG)
+    freshlog.Debug.Print("opening jimbob bucket")
     var err error
     DB,err = jimbob.OpenBucket(CONFIG.DB_path + "/posts")
     if err != nil {
@@ -179,7 +181,10 @@ func main() {
 
     //multiplex
     r := mux.NewRouter()
+    static_dir := http.Dir("static")
+    static_handler := http.FileServer(static_dir)
     r.HandleFunc("/", MainHandler)
+    r.PathPrefix("/static/{.+}").Handler(http.StripPrefix("/static/", static_handler))
     r.HandleFunc("/posts", PostsViewer)
     r.HandleFunc("/posts/{id:[0-9]*}", PostViewer)
     r.HandleFunc("/posts/{id:[0-9]*}/delete", PostDeleter)

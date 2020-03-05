@@ -6,6 +6,7 @@
 	</head>
 	<body>
     <h1><a href="/">frogblog</a></h1>
+    <a href="/posts/create">write post</a>
 {{range $id, $elem := .}}
     <h2><a href="posts/{{ $id }}">{{ $elem.Title }}</a></h2>
     <p>{{ $elem.Body }}</p>
