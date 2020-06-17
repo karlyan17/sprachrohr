@@ -3,8 +3,7 @@ package main
 
 
 import(
-    //"github.com/karlyan17/jimbob"
-    "jimbob"
+    "github.com/karlyan17/jimbob"
     "github.com/gorilla/mux"
     "github.com/gorilla/sessions"
     "github.com/gorilla/securecookie"
