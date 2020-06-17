@@ -1,0 +1,15 @@
+{{$auth := .session.Values.auth}}
+{{$data := .data}}
+{{$maxlen := 400}}
+{{range $id, $elem := $data}}
+<a href="posts/{{ $id }}">
+<div class="posts">
+<h2>{{ $elem.Title }}</h2>
+{{if lt (len $elem.Body) $maxlen}}
+<p>{{ $elem.Body}}</p>
+{{else}}
+<p>{{ slice $elem.Body 0 $maxlen}} ...</p>
+{{end}}
+</div>
+</a>
+{{end}}

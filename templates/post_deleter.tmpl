@@ -1,0 +1,15 @@
+{{$auth := .session.Values.auth}}
+{{$data := .data}}
+<div class="post">
+    <h2>Are yoy sure you want to delete</h2>
+{{range $id, $elem := $data}}
+    <h3>{{ $elem.Title }}</h3>
+    <h2>?</h2>
+</div>
+<div class="delete">
+    <form method="post">
+        <input type="submit" value="YES">
+        <button type="button" onclick="window.location.replace('/posts/{{ $id }}')">NO</button>
+    </form>
+</div>
+{{end}}

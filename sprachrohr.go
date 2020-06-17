@@ -3,220 +3,306 @@ package main
 
 
 import(
-	"fmt"
-	"os"
-	"io/ioutil"
-	"encoding/json"
-	"strings"
-	"net/url"
-	"strconv"
-	"time"
-	"regexp"
+    //"github.com/karlyan17/jimbob"
+    "jimbob"
+    "github.com/gorilla/mux"
+    "github.com/gorilla/sessions"
+    "github.com/gorilla/securecookie"
+    "net/http"
+    "strconv"
+    "html/template"
+    "golang.org/x/crypto/bcrypt"
+    "sprachrohr/post"
+    "sprachrohr/freshlog"
+    "sprachrohr/config"
 )
 
-// variables
-var environ []string
-var args string
-var response_body string
-var blog_path string = "/home/nurgling/blog"
-var error_message string = "<h4>Oops, something went wrong</h4><p>Please send the exact URL and a description what you were doing to karlyan.kamerer (at) gmail.com"
-var env_var map[string]string
-var query_var map[string]string
+var CONFIG  config.Config
+var POSTS   jimbob.Bucket
+var USERS   jimbob.Bucket
+var COOK    *sessions.CookieStore
 
-type Post struct {
-        Date string
-        Title string
-        Body string
-        Comments [5]string
+func MainHandler(writer http.ResponseWriter, request *http.Request) {
+    freshlog.Debug.Print("request is: ", request)
+
+    vars := mux.Vars(request)
+    freshlog.Debug.Print("vars are: ", vars)
+
+    http.Redirect(writer, request, "/posts", http.StatusSeeOther)
 }
 
-var page [5]Post
+func AuthHandler(writer http.ResponseWriter, request *http.Request) {
+    freshlog.Debug.Print("request is: ", request)
 
-func buildPage(pagenum int) string {
-	var response_body string
-	postlist,err := ioutil.ReadDir(blog_path)
-	if err != nil {
-		response_body = error_message
-		return response_body
-	}
-	for i,p := range(page) {
-		post_index := len(postlist) - (1 + i + (pagenum - 1)*len(page))
-		if post_index < 0 {
-			break}
-		content,err := ioutil.ReadFile(blog_path + "/" + postlist[post_index].Name())
+    vars := mux.Vars(request)
+    freshlog.Debug.Print("vars are: ", vars)
+
+    switch request.Method {
+    case http.MethodPost:
+        user_name := request.PostFormValue("user")
+        freshlog.Debug.Print("user trying to log in: ", user_name)
+        plain_pw := []byte(request.PostFormValue("pw"))
+
+		auth := false
+		if len(USERS.Data) == 0 {
+            freshlog.Debug.Print("no users in db creating first")
+            pw,err := bcrypt.GenerateFromPassword(plain_pw , bcrypt.DefaultCost)
+            if err != nil {
+                freshlog.Error.Print("unable to hash password: ", err)
+            }
+            user := map[string]interface{}{"user": user_name, "pw": pw}
+			id, err := USERS.Post(user)
+			if err != nil {
+				freshlog.Warn.Print("committing to database failed: ", err)
+			}
+            freshlog.Debug.Print("created user: ", user_name, " id: ", id)
+			auth = true
+		} else {
+            for _,user_data := range(USERS.Data) {
+                user_obj := user_data.(map [string]interface{})
+                if user_obj["user"] == user_name {
+                    err := bcrypt.CompareHashAndPassword([]byte(user_obj["pw"].(string)), []byte(plain_pw))
+                    if err == nil {
+                        auth = true
+                    }
+                }
+            }
+        }
+
+        if !auth {
+            freshlog.Warn.Print("authentification failed: ", user_name)
+        }
+		session, err := COOK.Get(request, "sprachrohr-sess")
 		if err != nil {
-			response_body = error_message
-			return response_body
+			freshlog.Warn.Print("error decoding session: ", err)
 		}
-		json.Unmarshal(content, &p)
-		epoch,_ := strconv.Atoi(p.Date)
-		post_time := time.Unix(int64(epoch), 0)
-		post_time_string := fmt.Sprintf("%d-%02d-%02d", post_time.Year(), post_time.Month(), post_time.Day())
-		post_body := fmt.Sprintf("<h3>%v<a href=\"?perma=%v\"> &gt;&gt;</a></h3>", p.Title, p.Date)
-		post_body += fmt.Sprintf("<p>%v<br>\n%v<br>\nComments:</p>\n<ul>\n", post_time_string,  p.Body)
-		for _,c := range(p.Comments) {
-			if  c != "" {
-				post_body += fmt.Sprintln("<li>" + c + "\n")
-			}
-		}
-		post_body += "</ul><br>\n"
-		post_body += "<form action=\"" + env_var["REQUEST_URI"] + "\" method=\"POST\">"
-		post_body += "<input type=\"hidden\" name=\"id\" value=\"" + p.Date + "\" />"
-		post_body += "<input type=\"submit\" value=\"Comment\">"
-		post_body += "<textarea name=\"c\" rows=\"2\" cols=\"50\" size=\"1000\">"
-		post_body += "</textarea>"
-		post_body += "</form>"
-		response_body += post_body
-		
-	}
-	return response_body
-}
-func buildPost(id string) string {
-	var response_body string
-	var p Post
-	content,err := ioutil.ReadFile(blog_path + "/" + id)
-	if err == nil {
-		json.Unmarshal(content, &p)
-		epoch,_ := strconv.Atoi(p.Date)
-		post_time := time.Unix(int64(epoch), 0)
-		post_time_string := fmt.Sprintf("%d-%02d-%02d", post_time.Year(), post_time.Month(), post_time.Day())
-		post_body := fmt.Sprintf("<h3>%v<a href=\"?perma=%v\"> &gt;&gt;</a></h3>", p.Title, p.Date)
-		post_body += fmt.Sprintf("<p>%v<br>\n%v<br>\nComments:</p>\n<ul>\n", post_time_string,  p.Body)
-		for _,c := range(p.Comments) {
-			if  c != "" {
-				post_body += fmt.Sprintln("<li>" + c + "\n")
-			}
-		}
-		post_body += "</ul><br>\n"
-		post_body += "<form action=\"" + env_var["REQUEST_URI"] + "\" method=\"POST\"\n>"
-		post_body += "<input type=\"hidden\" name=\"id\" value=\"" + p.Date + "\" />\n"
-		post_body += "<input type=\"submit\" value=\"Comment\" style=\"height:40px; width:80px\">\n"
-		post_body += "<textarea name=\"c\" rows=\"2\" cols=\"50\" size=\"1000\">\n"
-		post_body += "</textarea>\n"
-		post_body += "</form>\n"
-		response_body = post_body + response_body
-	} else {
-		response_body = "post " + id + " not found"
-	}
-	return response_body
-}
+		session.Values["auth"] = auth
+		session.Save(request, writer)
 
-func buildSearch(search_term string) string {
-	var response_body string
-	var p Post
-	postlist,err := ioutil.ReadDir(blog_path)
-	if err != nil {
-		response_body = error_message
-		return response_body
-	}
-	for _,post_file := range(postlist) {
-		content,err := ioutil.ReadFile(blog_path + "/" + post_file.Name())
+    case http.MethodDelete:
+		session, err := COOK.Get(request, "sprachrohr-sess")
 		if err != nil {
-			response_body = error_message
-			return response_body
+			freshlog.Warn.Print("error decoding session: ", err)
 		}
-		json.Unmarshal(content, &p)
-		epoch,_ := strconv.Atoi(p.Date)
-		post_time := time.Unix(int64(epoch), 0)
-		post_time_string := fmt.Sprintf("%d-%02d-%02d", post_time.Year(), post_time.Month(), post_time.Day())
-		in_body,_ :=  regexp.MatchString(search_term, p.Body)
-		in_epoch,_ := regexp.MatchString(search_term, p.Date)
-		in_title,_ := regexp.MatchString(search_term, p.Title)
-		in_date,_ := regexp.MatchString(search_term, post_time_string)
-		in_comments := false
-		for _,comment := range(p.Comments) {
-			if in_comments,_ = regexp.MatchString(search_term, comment); in_comments {
-				break
-			}
-		}
-		if in_body || in_epoch || in_title || in_date || in_comments {
-			response_body += fmt.Sprintf("<a href=\"?perma=%v\">&gt;&gt; </a>%v: %v<br>", p.Date, post_time_string, p.Title)
-		}
+		session.Values["auth"] = false
+		session.Save(request, writer)
 	}
-	return response_body
+
+	http.Redirect(writer, request, "/posts", http.StatusSeeOther)
+	return
 }
 
-func updateComment(id, comment string) {
-	var post Post
-	content,err := ioutil.ReadFile(blog_path + "/" + id)
-	json.Unmarshal(content, &post)
-	if err != nil {
-		response_body += "<h2>go fuck yourself</h2>"
-	} else {
-		if post.Comments[0] != "" {
-			for j:=len(post.Comments)-1;j>0;j-- {
-				post.Comments[j] = post.Comments[j-1]
-			}
-		}
-		post.Comments[0] = comment
-		json_bytes,_ := json.Marshal(post)
-		ioutil.WriteFile(blog_path + "/" + id, json_bytes, 0644)
-	}
+func PostsViewer(writer http.ResponseWriter, request *http.Request) {
+    freshlog.Debug.Print("request is: ", request)
+
+    vars := mux.Vars(request)
+    freshlog.Debug.Print("vars are: ", vars)
+
+	session, err := COOK.Get(request, "sprachrohr-sess")
+    if err != nil {
+        freshlog.Warn.Print("error decoding session: ", err)
+    }
+
+    data := POSTS.Data
+
+    serveTemplate("posts.tmpl", writer, map[string]interface{} {"data": data, "session": session})
+}
+
+func PostViewer(writer http.ResponseWriter, request *http.Request) {
+    freshlog.Debug.Print("request is: ", request)
+
+    vars := mux.Vars(request)
+    freshlog.Debug.Print("vars are: ", vars)
+
+	session, err := COOK.Get(request, "sprachrohr-sess")
+    if err != nil {
+        freshlog.Warn.Print("error decoding session: ", err)
+    }
+
+    if len(vars) == 0 {
+        http.Redirect(writer, request, "/posts", http.StatusSeeOther)
+        return
+    }
+
+    id,err := strconv.Atoi(vars["id"])
+    if err != nil {
+        http.Redirect(writer, request, "/posts", http.StatusSeeOther)
+        return
+    }
+    if POSTS.Data[id] == nil {
+        //TODO log not found error
+        http.Error(writer, "gibbet nischt", http.StatusNotFound)
+        return
+    }
+
+    data := map[int]interface{} {id: POSTS.Data[id]}
+
+    serveTemplate("post.tmpl", writer, map[string]interface{} {"data": data, "session": session})
+}
+
+func PostCreator(writer http.ResponseWriter, request *http.Request) {
+    freshlog.Debug.Print("request is: ", request)
+
+	session, err := COOK.Get(request, "sprachrohr-sess")
+    if err != nil {
+        freshlog.Warn.Print("error decoding session: ", err)
+    }
+
+    if auth, ok := session.Values["auth"].(bool); !ok || !auth {
+		freshlog.Warn.Print("forbidden request: ", err)
+        http.Error(writer, "fuck off", http.StatusForbidden)
+        return
+    }
+
+    switch request.Method {
+    case http.MethodGet:
+        writer.WriteHeader(http.StatusOK)
+        data := POSTS.Data
+        serveTemplate("post_creator.tmpl", writer, map[string]interface{} {"data": data, "session": session})
+    case http.MethodPost:
+        err := request.ParseForm()
+        if err != nil {
+            freshlog.Warn.Print("error parsing Form: ", err)
+            http.Redirect(writer, request, request.RequestURI, http.StatusNotModified)
+            return
+        }
+        title := request.PostFormValue("title")
+        freshlog.Debug.Print("Title: ", title)
+        body := request.PostFormValue("body")
+        freshlog.Debug.Print("Body: ", body)
+        if title == "" || body == "" {
+            freshlog.Warn.Print("neither Title nor Body can be empty!")
+            http.Redirect(writer, request, request.RequestURI, http.StatusNotModified)
+            return
+        }
+        new_post := post.NewPost(title, body)
+        id, err := POSTS.Post(new_post)
+        if err != nil {
+            freshlog.Warn.Print("committing to database failed: ", err)
+            http.Redirect(writer, request, request.RequestURI, http.StatusNotModified)
+            return
+        }
+        http.Redirect(writer, request, "/posts/" + strconv.Itoa(id), http.StatusFound)
+        return
+    }
+
+}
+
+func PostDeleter(writer http.ResponseWriter, request *http.Request) {
+    freshlog.Debug.Print("request is: ", request)
+
+    vars := mux.Vars(request)
+    freshlog.Debug.Print("vars are: ", vars)
+
+	session, err := COOK.Get(request, "sprachrohr-sess")
+
+    if auth, ok := session.Values["auth"].(bool); !ok || !auth {
+		freshlog.Warn.Print("forbidden request: ", err)
+        http.Error(writer, "fuck off", http.StatusForbidden)
+        return
+    }
+
+    if len(vars) == 0 {
+        freshlog.Warn.Print("somehow passed empty vars to deleter")
+        writer.WriteHeader(http.StatusInternalServerError)
+    }
+
+    id,err := strconv.Atoi(vars["id"])
+    if err != nil {
+        //TODO make error
+        http.Redirect(writer, request, "/posts", http.StatusSeeOther)
+        return
+    }
+    if POSTS.Data[id] == nil {
+        //TODO make error
+        http.Error(writer, "gibbet nischt", http.StatusNotFound)
+        return
+    }
+
+    switch request.Method {
+    case http.MethodGet:
+        data := map[int]interface{} {id: POSTS.Data[id]}
+        writer.WriteHeader(http.StatusOK)
+        serveTemplate("post_deleter.tmpl", writer, map[string]interface{} {"data": data, "session": session})
+        return
+    case http.MethodPost:
+        if err != nil {
+            freshlog.Warn.Print("error converting ID to string: ", err)
+            http.Redirect(writer, request, request.RequestURI, http.StatusNotModified)
+            return
+        }
+        err = POSTS.Delete(id)
+        if err != nil {
+            freshlog.Warn.Print("committing to database failed: ", err)
+            http.Redirect(writer, request, request.RequestURI, http.StatusNotModified)
+            return
+        }
+        freshlog.Debug.Print("Successfully deleted: ", id)
+        http.Redirect(writer, request, "/posts", http.StatusFound)
+        return
+    }
+}
+
+func serveTemplate(tmpl string, writer http.ResponseWriter, data interface{}) {
+    //TODO return error
+    templ,err := template.ParseFiles(CONFIG.Template_path + "/__first.tmpl", CONFIG.Template_path + "/" +  tmpl, CONFIG.Template_path + "/__last.tmpl")
+    if err != nil {
+        freshlog.Error.Print("failed to read template file: ", err)
+        writer.WriteHeader(http.StatusInternalServerError)
+    }
+
+    err = templ.ExecuteTemplate(writer, "__first.tmpl", data)
+    if err != nil {
+        freshlog.Error.Print("template error ", err)
+        return
+    }
+    err = templ.ExecuteTemplate(writer, tmpl,  data)
+    if err != nil {
+        freshlog.Error.Print("template error ", err)
+        return
+    }
+
+    err = templ.ExecuteTemplate(writer, "__last.tmpl", data)
+    if err != nil {
+        freshlog.Error.Print("template error ", err)
+        return
+    }
 }
 
 func main() {
-	env_var = make(map[string]string)
-	query_var = make(map[string]string)
-	environ = os.Environ()
-	for _,n := range(environ) {
-		split := strings.SplitN(n, "=", 2)
-		env_var[split[0]] = split[1]
-	}
-	if env_var["QUERY_STRING"] != "" {
-		split_query := strings.Split(env_var["QUERY_STRING"], "&")
-		for _,n := range(split_query) {
-			split := strings.SplitN(n, "=", 2)
-			query_var[split[0]] = split[1]
-		}
-	}
-	response_body = "<!doctype html>\n<html><meta charset=\"utf-8\">\n"
-	response_body += "<header><title>SprachRohr Blog</title></header>\n<body>\n" 
-	response_body += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
-	response_body += "<a href=/><img src=\"/podge.png\" width=\"268\" height=\"180\">\n</a>"
-	response_body += "<h1>SprachRohr Blog</h1>\n"
-	response_body += "<form action=\"" + env_var["REQUEST_URI"] + "\" method=\"GET\">"
-	response_body += "<input type=\"text\" name=\"q\"><input type=\"submit\" value=\"Search\">"
-	response_body += "</form><br>"
-	if env_var["REQUEST_METHOD"] == "POST" {
-		if len(os.Args) == 2 && os.Args[1] != "" {
-			args,_ = url.QueryUnescape(os.Args[1])
-			arg_var := make(map[string]string)
-			split_args := strings.Split(args, "&")
-			for _,n := range(split_args) {
-				split := strings.SplitN(n, "=", 2)
-				arg_var[split[0]] = split[1]
-			}
-			if arg_var["c"] != "" && arg_var["id"] != "" {
-				clean_c := strings.Replace(arg_var["c"], "&", "&amp; ", -1)
-				clean_c = strings.Replace(clean_c, ">", "&gt; ", -1)
-				clean_c = strings.Replace(clean_c, "<", "&lt; ", -1)
-				clean_c = strings.Replace(clean_c, "\"", "&quot; ", -1)
-				clean_c = strings.Replace(clean_c, "'", "&apos; ", -1)
-				if len(clean_c) > 1000 {
-					clean_c = string([]rune(clean_c)[0:1000])
-				}
-				updateComment(arg_var["id"], clean_c)
-			}
-		}
-	}
-	pagenum, err := strconv.Atoi(query_var["p"])
-	if id := query_var["perma"]; id != "" {
-		response_body += buildPost(id)
-	} else if search_term:= query_var["q"]; search_term !="" {
-		response_body += buildSearch(search_term)
-	} else if err == nil && pagenum != 0 && pagenum != 1 {
-		response_body += fmt.Sprintf("<p style=\"text-align:center;\"><a href=?p=%v>&lt; newer</a>|<a href=?p=%v>older &gt;</a></p>\n", strconv.Itoa(pagenum - 1), strconv.Itoa(pagenum + 1))
-		response_body += buildPage(pagenum)
-		response_body += fmt.Sprintf("<p style=\"text-align:center;\"><a href=?p=%v>&lt; newer</a>|<a href=?p=%v>older &gt;</a></p>\n", strconv.Itoa(pagenum - 1), strconv.Itoa(pagenum + 1))
-	} else {
-		response_body += "<p style=\"text-align:center;\"><a href=?p=2>older &gt;</a></p>\n"
-		response_body += buildPage(1)
-		response_body += "<p style=\"text-align:center;\"><a href=?p=2>older &gt;</a></p>\n"
-	}
-	response_body += "<p><a href=/faq.html>FAQ</a> For bugs, ideas, suggestion and other spam: karlyan.kamerer (at) gmail.com </p>\n"
-	response_body += "</body>\n</html>\n"
+    //
+    CONFIG = config.ParseFlags()
+    freshlog.SetLogLevel(CONFIG.Log_Level)
+    freshlog.Debug.Print(CONFIG)
 
-	//fmt.Printf("HTTP/1.1 200 OK\r\nServer: nurgling/0.1\r\n")
-	//fmt.Printf("Content-Type: text/html; charset=utf-8\r\nContent-Length: %v\r\n\r\n" + response_body, len(response_body))
-	fmt.Printf(response_body)
+    freshlog.Debug.Print("opening jimbob bucket posts")
+    var err error
+    POSTS,err = jimbob.OpenBucket(CONFIG.DB_path + "/posts")
+    if err != nil {
+        freshlog.Fatal.Fatal("could not open jimbob Bucket: ",err)
+    }
+
+    freshlog.Debug.Print("opening jimbob bucket users")
+    USERS,err = jimbob.OpenBucket(CONFIG.DB_path + "/users")
+    if err != nil {
+        freshlog.Fatal.Fatal("could not open jimbob Bucket: ",err)
+    }
+
+    freshlog.Debug.Print("opening cookie jar")
+    COOK = sessions.NewCookieStore(securecookie.GenerateRandomKey(32))
+
+    //multiplex
+    r := mux.NewRouter()
+    static_dir := http.Dir("static")
+    static_handler := http.FileServer(static_dir)
+    r.HandleFunc("/", MainHandler).Methods("GET")
+    r.PathPrefix("/static/{.+}").Handler(http.StripPrefix("/static/", static_handler))
+    r.HandleFunc("/auth", AuthHandler).Methods("POST","DELETE")
+    r.HandleFunc("/posts", PostsViewer).Methods("GET")
+    r.HandleFunc("/posts/{id:[0-9]*}", PostViewer).Methods("GET")
+    r.HandleFunc("/posts/{id:[0-9]*}/delete", PostDeleter).Methods("GET","POST")
+    r.HandleFunc("/posts/create", PostCreator).Methods("GET","POST")
+
+    //do shit
+    freshlog.Fatal.Fatal(http.ListenAndServe(CONFIG.IP + ":" + strconv.Itoa(CONFIG.Port), r))
 }

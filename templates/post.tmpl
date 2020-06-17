@@ -1,0 +1,15 @@
+{{$auth := .session.Values.auth}}
+{{$data := .data}}
+{{range $id, $elem := $data}}
+<div class="post">
+    <h2>{{ $elem.Title }}</h2>
+    <p>{{ $elem.Body }}</p>
+    {{if $auth }}
+</div>
+<div class="delete">
+    <form method="get" action="/posts/{{ $id }}/delete">
+        <input type="Submit" value="delete">
+    </form>
+</div>
+    {{end}}
+{{end}}
