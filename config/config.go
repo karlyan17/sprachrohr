@@ -10,6 +10,7 @@ type Config struct {
     Port    int
     DB_path string
     Template_path string
+    Static_path string
     Log_Level string
 }
 
@@ -19,8 +20,9 @@ func ParseFlags() Config {
     var port = flag.Int("port", 80, "port to listen on")
     var db_path = flag.String("db", "db", "Absolute path to the jimbob database")
     var template_path = flag.String("t", "templates", "Absolute path to the templates")
+    var static_path = flag.String("s", "static", "Absolute path to static files")
     var log_level = flag.String("l", "info", "log level debug, info, warning, error, fatal")
     flag.Parse()
 
-    return Config{*ip, *port, *db_path, *template_path, *log_level}
+    return Config{*ip, *port, *db_path, *template_path, *static_path,*log_level}
 }
