@@ -292,10 +292,10 @@ func main() {
 
     //multiplex
     r := mux.NewRouter()
-    static_dir := http.Dir("static")
+    static_dir := http.Dir(CONFIG.Static_path)
     static_handler := http.FileServer(static_dir)
     r.HandleFunc("/", MainHandler).Methods("GET")
-    r.PathPrefix("/static/{.+}").Handler(http.StripPrefix(CONFIG.Static_path, static_handler))
+    r.PathPrefix("/static/{.+}").Handler(http.StripPrefix("/static/", static_handler))
     r.HandleFunc("/auth", AuthHandler).Methods("POST","DELETE")
     r.HandleFunc("/posts", PostsViewer).Methods("GET")
     r.HandleFunc("/posts/{id:[0-9]*}", PostViewer).Methods("GET")
