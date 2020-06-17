@@ -6,12 +6,14 @@
 	</head>
     <h1><a href="/">frogblog</a></h1>
 	<body>
-{{range $id, $elem := .}}
+{{range $id, $elem := .data}}
     <h1>{{ $elem.Title }}</h1>
     <p>{{ $elem.Body }}</p>
+    {{if .session.Values.auth }}
     <form method="get" action="/posts/{{ $id }}/delete">
         <input type="Submit" value="delete">
     </form>
+    {{end}}
 {{end}}
 	</body>
 </html>

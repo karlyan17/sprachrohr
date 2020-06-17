@@ -74,18 +74,15 @@ func AuthHandler(writer http.ResponseWriter, request *http.Request) {
         }
 		session, err := COOK.Get(request, "sprachrohr-sess")
 		if err != nil {
-			http.Error(writer, "you broke it!", http.StatusInternalServerError)
 			freshlog.Warn.Print("error decoding session: ", err)
-			return
 		}
 		session.Values["auth"] = auth
 		session.Save(request, writer)
+
     case http.MethodDelete:
 		session, err := COOK.Get(request, "sprachrohr-sess")
 		if err != nil {
-			http.Error(writer, "you broke it!", http.StatusInternalServerError)
 			freshlog.Warn.Print("error decoding session: ", err)
-			return
 		}
 		session.Values["auth"] = false
 		session.Save(request, writer)
@@ -101,7 +98,14 @@ func PostsViewer(writer http.ResponseWriter, request *http.Request) {
     vars := mux.Vars(request)
     freshlog.Debug.Print("vars are: ", vars)
 
-    serveTemplate("posts.tmpl", writer, POSTS.Data)
+	session, err := COOK.Get(request, "sprachrohr-sess")
+    if err != nil {
+        freshlog.Warn.Print("error decoding session: ", err)
+    }
+
+    data := POSTS.Data
+
+    serveTemplate("posts.tmpl", writer, map[string]interface{} {"data": data, "session": session})
 }
 
 func PostViewer(writer http.ResponseWriter, request *http.Request) {
@@ -109,6 +113,11 @@ func PostViewer(writer http.ResponseWriter, request *http.Request) {
 
     vars := mux.Vars(request)
     freshlog.Debug.Print("vars are: ", vars)
+
+	session, err := COOK.Get(request, "sprachrohr-sess")
+    if err != nil {
+        freshlog.Warn.Print("error decoding session: ", err)
+    }
 
     if len(vars) == 0 {
         http.Redirect(writer, request, "/posts", http.StatusSeeOther)
@@ -121,19 +130,23 @@ func PostViewer(writer http.ResponseWriter, request *http.Request) {
         return
     }
     if POSTS.Data[id] == nil {
-        //TODO make error
-        writer.WriteHeader(http.StatusNotFound)
-        writer.Write([]byte("gibbet nischt"))
+        //TODO log not found error
+        http.Error(writer, "gibbet nischt", http.StatusNotFound)
         return
     }
 
-    serveTemplate("post.tmpl", writer, map[int]interface{} {id: POSTS.Data[id]})
+    data := map[int]interface{} {id: POSTS.Data[id]}
+
+    serveTemplate("post.tmpl", writer, map[string]interface{} {"data": data, "session": session})
 }
 
 func PostCreator(writer http.ResponseWriter, request *http.Request) {
     freshlog.Debug.Print("request is: ", request)
 
 	session, err := COOK.Get(request, "sprachrohr-sess")
+    if err != nil {
+        freshlog.Warn.Print("error decoding session: ", err)
+    }
 
     if auth, ok := session.Values["auth"].(bool); !ok || !auth {
 		freshlog.Warn.Print("forbidden request: ", err)
@@ -144,7 +157,8 @@ func PostCreator(writer http.ResponseWriter, request *http.Request) {
     switch request.Method {
     case http.MethodGet:
         writer.WriteHeader(http.StatusOK)
-        serveTemplate("post_creator.tmpl", writer, POSTS.Data)
+        data := POSTS.Data
+        serveTemplate("post_creator.tmpl", writer, map[string]interface{} {"data": data, "session": session})
     case http.MethodPost:
         err := request.ParseForm()
         if err != nil {
@@ -201,8 +215,7 @@ func PostDeleter(writer http.ResponseWriter, request *http.Request) {
     }
     if POSTS.Data[id] == nil {
         //TODO make error
-        writer.WriteHeader(http.StatusNotFound)
-        writer.Write([]byte("gibbet nischt"))
+        http.Error(writer, "gibbet nischt", http.StatusNotFound)
         return
     }
 

@@ -7,7 +7,7 @@
     <h1><a href="/">frogblog</a></h1>
 	<body>
     <h2>Are yoy sure you want to delete</h2>
-{{range $id, $elem := .}}
+{{range $id, $elem := .data}}
     <h3>{{ $elem.Title }}</h3>
     <h2>?</h2>
     <form method="post">
