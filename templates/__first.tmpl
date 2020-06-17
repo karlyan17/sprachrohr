@@ -1,2 +1,31 @@
+{{$auth := .session.Values.auth}}
+<!DOCTYPE html>
 <html>
-</html>
+	<head>
+		<meta charset="UTF-8">
+		<title>frogblog</title>
+        <link rel="stylesheet" type="text/css" href="/static/main.css">
+	</head>
+    <body>
+        <div class="header">
+            <div class="headline">
+<h1><a href="/">frogblog</a></h1>
+            </div>
+            <div class="auth">
+{{if not $auth }}
+<form action="/auth",  method="post" >
+    <input type="text" id="user" name="user" value="user"><br>
+    <input type="password" id="pw" name="pw" value="password">
+    <input type="submit" value="login" >
+</form>
+                
+{{else}}
+<form action="/posts/create", method="get">
+    <input type="submit" value="write post" >
+</form>
+<form action="/auth",  method="post">
+    <input type="submit" value="logout" >
+</form>
+{{end}}
+            </div>
+        </div>

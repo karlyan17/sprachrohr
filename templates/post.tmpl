@@ -1,19 +1,15 @@
-<!DOCTYPE html>
-<html>
-	<head>
-		<meta charset="UTF-8">
-		<title>frogblog</title>
-	</head>
-    <h1><a href="/">frogblog</a></h1>
-	<body>
-{{range $id, $elem := .data}}
-    <h1>{{ $elem.Title }}</h1>
+{{$auth := .session.Values.auth}}
+{{$data := .data}}
+{{range $id, $elem := $data}}
+<div class="post">
+    <h2>{{ $elem.Title }}</h2>
     <p>{{ $elem.Body }}</p>
-    {{if .session.Values.auth }}
+    {{if $auth }}
+</div>
+<div class="delete">
     <form method="get" action="/posts/{{ $id }}/delete">
         <input type="Submit" value="delete">
     </form>
+</div>
     {{end}}
 {{end}}
-	</body>
-</html>

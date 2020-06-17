@@ -1,29 +1,10 @@
-<html>
-	<head>
-		<meta charset="UTF-8">
-		<title>frogblog</title>
-	</head>
-	<body>
-    <h1><a href="/">frogblog</a></h1>
-{{if not .session.Values.auth }}
-    <form action="/auth",  method="post" >
-        <input type="text" id="user" name="user" value="user"><br>
-        <input type="password" id="pw" name="pw" value="password">
-        <input type="submit" value="login" >
-    </form>
-{{else}}
-    <form action="/auth",  method="post">
-        <input type="submit" value="logout" >
-    </form>
+{{$auth := .session.Values.auth}}
+{{$data := .data}}
+{{range $id, $elem := $data}}
+<a href="posts/{{ $id }}">
+<div class="posts">
+<h2>{{ $elem.Title }}</h2>
+<p>{{ $elem.Body }}</p>
+</div>
+</a>
 {{end}}
-
-	    </body>
-{{if .session.Values.auth }}
-    <a href="/posts/create">write post</a>
-{{end}}
-{{range $id, $elem := .data}}
-    <h2><a href="posts/{{ $id }}">{{ $elem.Title }}</a></h2>
-    <p>{{ $elem.Body }}</p>
-{{end}}
-	</body>
-</html>

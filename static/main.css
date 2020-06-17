@@ -1,0 +1,93 @@
+body {
+    background-color: grey;
+}
+
+body a {
+  display: block;
+  color: black;
+  text-decoration: none;
+}
+
+body a:hover {
+  background-color: #ddd;
+  color: black;
+}
+
+h1 {
+	margin-left: 20px;
+}
+
+input {
+    border: none;
+    border-bottom: 2px solid lightgrey;
+    background-color: grey;
+    color: black;
+} 
+
+input:focus, input:hover {
+	opacity: 1;
+    border: none;
+    border-bottom: 2px solid black;
+}
+
+input[type=button], button,  input[type=submit], input[type=reset] {
+	background-color: lightgrey;
+	border: none;
+	color: black;
+	padding: 10px;
+	text-decoration: none;
+	margin: 4px 2px;
+	cursor: pointer;
+	width: 80px;
+}
+
+.header:after {
+    content: "";
+    display: table;
+    clear: both;
+}
+
+.headline {
+	float: left;
+}
+
+.nav {
+	background-color: lightgrey;
+	padding: 2px 4px;
+	margin: auto;
+	width: 30%;
+	align: center;
+}
+
+.auth {
+	float: right;
+	margin: 8px 2px;
+	padding: 2px 4px;
+	opacity: 0.3;
+}
+
+.posts {
+	background-color: lightgrey;
+	padding: 2px 4px;
+	margin: 4px 2px;
+	float: left;
+	width: 32%;
+}
+
+.posts:hover {
+  background-color: #ddd;
+  color: black;
+}
+
+
+.post {
+	background-color: lightgrey;
+	padding: 2px 4px;
+	margin: auto;
+}
+
+@media screen and (max-width:600px) {
+	.posts {
+		width: 100%;
+	}
+}

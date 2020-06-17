@@ -221,8 +221,9 @@ func PostDeleter(writer http.ResponseWriter, request *http.Request) {
 
     switch request.Method {
     case http.MethodGet:
+        data := map[int]interface{} {id: POSTS.Data[id]}
         writer.WriteHeader(http.StatusOK)
-        serveTemplate("post_deleter.tmpl", writer, map[int]interface{} {id: POSTS.Data[id]})
+        serveTemplate("post_deleter.tmpl", writer, map[string]interface{} {"data": data, "session": session})
         return
     case http.MethodPost:
         if err != nil {

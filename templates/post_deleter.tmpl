@@ -1,19 +1,15 @@
-<!DOCTYPE html>
-<html>
-	<head>
-		<meta charset="UTF-8">
-		<title>frogblog</title>
-	</head>
-    <h1><a href="/">frogblog</a></h1>
-	<body>
+{{$auth := .session.Values.auth}}
+{{$data := .data}}
+<div class="post">
     <h2>Are yoy sure you want to delete</h2>
-{{range $id, $elem := .data}}
+{{range $id, $elem := $data}}
     <h3>{{ $elem.Title }}</h3>
     <h2>?</h2>
+</div>
+<div class="delete">
     <form method="post">
         <input type="submit" value="YES">
         <button type="button" onclick="window.location.replace('/posts/{{ $id }}')">NO</button>
     </form>
+</div>
 {{end}}
-	</body>
-</html>
